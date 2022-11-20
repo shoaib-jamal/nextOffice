@@ -1,78 +1,106 @@
 <template>
   <q-layout class="user-area-pattern" view="lHh Lpr lFf">
 
-    <q-page-container>
-      <q-page>
-        <div class="row" style="width: 100vw; height: 40px;">
 
-          <q-btn flat class="text-primary tabMenuButton" id="listTableButton" icon="fas fa-bars">
-            <q-menu>
-              <q-list style="min-width: 280px">
-                <q-item clickable v-close-popup
-                        @click="$router.push('/workspace/' + workspaceName + '/' + baseName + '/' + item.document_name)"
-                        v-for="item in baseConfig.items"
-                        :key="item.document_name">
-                  <q-item-section>{{ item.document_name }}</q-item-section>
-                  <q-item-section avatar>
-                    <q-icon
-                      :name="baseItemTypes[item.document_extension] ? baseItemTypes[item.document_extension].icon : item.document_extension"></q-icon>
+    <base-view-router class="base-view-router" ref="viewRouter" v-if="baseLoaded && selectedBaseItem"
+                      :base-config="baseConfig"
+                      :baseItem="selectedBaseItem"></base-view-router>
+
+
+    <q-page-container v-if="!selectedBaseItem">
+      <q-page>
+        <q-card style="padding-top: 50px" flat>
+          <q-card-section>
+            <span class="text-h4">Create a new document</span>
+          </q-card-section>
+          <q-card-section>
+            <div class="row">
+
+              <div class="col-4 col-lg-3 col-xl-3 col-xs-12 col-md-4 col-sm-6 q-pa-md" :disable="item.disabled" clickable
+                   @click="addBaseItem(item)"
+                   v-close-popup
+                   v-for="item in baseItemTypes" v-if="!item.disabled"
+                   :key="item.label">
+                <q-item class="q-pa-md">
+                  <q-item-section>
+                    <q-btn style="size: 300px; height: 200px;" size="xl" :icon="item.icon" :label="item.label">
+                    </q-btn>
                   </q-item-section>
                 </q-item>
-                <q-separator/>
 
-              </q-list>
-            </q-menu>
-          </q-btn>
+              </div>
+              <q-separator/>
 
-          <q-tabs style="max-width: calc(100vw - 150px); height: 40px"
-                  class="text-black"
-                  inline-label
-                  shrink
-                  outside-arrows
+            </div>
 
-          >
-            <q-route-tab style="border: 1px solid black; border-radius: 4px"
-                         :key="item.reference_id"
-                         v-if="item.document_extension !== 'summary'" v-for="item in baseConfig.items"
-                         :to="'/workspace/' + workspaceName + '/' + baseName + '/' + item.document_name" exact replace
-            >
-              <span>
-                <q-icon
-                  :name="baseItemTypes[item.document_extension] ? baseItemTypes[item.document_extension].icon : item.document_extension"></q-icon> &nbsp;&nbsp;&nbsp;
-              </span>
-              {{
-                item.document_name
-              }}
-              <q-tooltip>
-                Right click for menu
-              </q-tooltip>
-              <q-menu context-menu
-                      style="min-width: 300px">
-                <q-list>
-                  <q-item clickable>
-                    <q-item-section @click="configureBaseItem(item)">
-                      <q-item-label>Configure</q-item-label>
-                    </q-item-section>
-                  </q-item>
-                  <q-item clickable @click="renameBaseItem(item)">
-                    <q-item-section>
-                      <q-item-label>Rename</q-item-label>
-                    </q-item-section>
-                  </q-item>
-                  <q-item clickable @click="deleteBaseItem(item)">
-                    <q-item-section>
-                      <q-item-label>Delete</q-item-label>
-                    </q-item-section>
-                  </q-item>
-                </q-list>
-              </q-menu>
-            </q-route-tab>
+          </q-card-section>
+        </q-card>
+      </q-page>
+    </q-page-container>
 
 
-          </q-tabs>
-          <q-btn ref="newItemMenuButton" flat class="text-primary tabMenuButton" id="newTableButton" icon="fas fa-plus">
+    <user-header-bar @toggle-left-drawer="$emit('toggle-left-drawer')" @delete-base="deleteBase"
+                     style="border-bottom: 1px solid black"
+                     @search="searchDocuments"
+                     class="print-hide"
+                     @hide-document-bars="documentTab = !documentTab"
+                     @reload-bases="refreshBaseData"
+                     :buttons="{
+        before: [
+            // {icon: 'fas fa-bars', event: 'hide-document-bars'},
+          ],
+        beforeTitle: [
+            {icon: 'fas fa-bars', event: 'hide-document-bars'},
+          ],
+        after: [
+            {icon: 'fas fa-sync-alt', tooltip: 'Reload base and all items', event: 'reload-bases'},
+            {icon: 'fas fa-trash', tooltip: 'Delete this base and all items in it. To delete a single item, right click on the tab', event: 'delete-base'},
+          ],
+        }" :onBack="() => {$router.push('/workspace/' + $route.params.workspaceName)}"
+                     :title='$route.params.workspaceName
+                     + "&nbsp;&nbsp; › &nbsp;&nbsp;" + ($route.params.baseName)
+                     + ( $route.params.itemName ? "&nbsp;&nbsp; › &nbsp;&nbsp;" + ($route.params.itemName) : "" )  '
+    ></user-header-bar>
+    <q-drawer
+      v-model="documentTab"
+      show-if-above
+      mini
+      :persistent="false"
+      mini-to-overlay
+      :width="400"
+      :breakpoint="500"
+      bordered
+      :mini="documentTabminiState"
+      @mouseover="documentTabminiState = false"
+      @mouseout="documentTabminiState = true"
+      content-class="bg-white print-hide"
+      class="print-hide"
+      style="overflow-y: hidden;"
+      content-style="overflow-y: hidden;"
+    >
+      <div style="overflow-y: hidden; padding-top: 140px" class="fit">
+
+        <q-list padding>
+
+          <q-item ref="newItemButton" clickable>
+            <q-item-section avatar>
+
+              <q-icon size="xs"
+                      name="fas fa-plus">
+              </q-icon>
+
+            </q-item-section>
+
+            <q-item-section v-if="!documentFilterKeyword">
+              Add new document
+            </q-item-section>
+
+            <q-item-section v-if="documentFilterKeyword">
+              Add new document named '{{ documentFilterKeyword }}'
+            </q-item-section>
+
             <q-menu>
-              <q-list style="min-width: 280px">
+              <q-list style="min-height: 500px">
 
                 <q-item :disable="item.disabled" clickable @click="addBaseItem(item)" v-close-popup
                         v-for="item in baseItemTypes"
@@ -86,77 +114,71 @@
 
               </q-list>
             </q-menu>
-          </q-btn>
+          </q-item>
 
+          <q-item
+            :key="item.reference_id"
+            v-if="item.document_extension !== 'summary'" v-for="item in filteredDocuments"
+            @click="$router.push('/workspace/' + workspaceName + '/' + baseName + '/' + item.document_name)"
+            clickable
+            v-ripple>
+            <q-item-section avatar>
+              <q-icon size="xs"
+                      :name="baseItemTypes[item.document_extension] ? baseItemTypes[item.document_extension].icon : item.document_extension"/>
+            </q-item-section>
+
+            <q-item-section>
+              {{
+                item.document_name
+              }}
+            </q-item-section>
+
+            <q-menu anchor="top right" context-menu
+                    style="min-width: 300px">
+              <q-list>
+                <q-item clickable>
+                  <q-item-section @click="configureBaseItem(item)">
+                    <q-item-label>Configure</q-item-label>
+                  </q-item-section>
+                </q-item>
+                <q-item clickable @click="renameBaseItem(item)">
+                  <q-item-section>
+                    <q-item-label>Rename</q-item-label>
+                  </q-item-section>
+                </q-item>
+                <q-item clickable @click="deleteBaseItem(item)">
+                  <q-item-section>
+                    <q-item-label>Delete</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+
+          </q-item>
+
+        </q-list>
+      </div>
+
+      <div v-if="decodedAuthToken != null" class="absolute-top q-pa-sm" style="height: 150px; ">
+        <q-btn size="sm" :style="{'display': documentTabminiState || !documentTab ? 'none' : 'block'}"
+               class="q-pa-md float-right" flat color="dark" icon="fas fa-power-off"></q-btn>
+        <div class="bg-transparent">
+          <q-avatar size="40px" class="">
+            <img :src="decodedAuthToken.picture">
+          </q-avatar>
+          <!--          <div :style="{'display': documentTabminiState ? 'none' : 'block', 'font-size': '10px'}" class="text-weight-light absolute-bottom q-pa-md" >-->
+          <!--            {{ decodedAuthToken.name }}-->
+          <!--          </div>-->
         </div>
-
-        <q-separator></q-separator>
-
-        <base-view-router ref="viewRouter" v-if="baseLoaded && selectedBaseItem" :base-config="baseConfig"
-                          :baseItem="selectedBaseItem"></base-view-router>
-        <div v-if="!selectedBaseItem" class="row">
-          <div class="col-6 offset-3 q-pa-md q-gutter-sm">
-            <q-card>
-              <q-card-section>
-                <div class="row">
-                  <div class="col-6">
-                    Select an item to open
-                    <q-list>
-                      <q-item :key="item.reference_id"
-                              v-if="item.document_extension !== 'summary'" v-for="item in baseConfig.items"
-                      >
-                        <q-btn
-                          @click="$router.push('/workspace/' + workspaceName + '/' + baseName + '/' + item.document_name)"
-                          exact replace
-                        >
-                      <span>
-                        <q-icon
-                          :name="baseItemTypes[item.document_extension] ? baseItemTypes[item.document_extension].icon : item.document_extension"></q-icon> &nbsp;&nbsp;&nbsp;
-                      </span>
-                          {{
-                            item.document_name
-                          }}
-                        </q-btn>
-
-                      </q-item>
-                    </q-list>
-
-
-                  </div>
-                  <div class="col-6">
-                    Or <br/>
-                    <q-btn @click="showAddNewItemMenu()" label="Add new item"></q-btn>
-                  </div>
-                </div>
-
-              </q-card-section>
-            </q-card>
-          </div>
+        <div class="absolute-bottom q-pa-md"
+        >
+          <q-input autofocus label="search document" @keypress.enter="selectFirstFilteredDocument()"
+                   v-model="documentFilterKeyword"></q-input>
         </div>
+      </div>
 
 
-      </q-page>
-
-    </q-page-container>
-
-    <user-header-bar @delete-base="deleteBase"
-                     style="border-bottom: 1px solid black"
-                     @search="searchDocuments"
-                     @reload-bases="refreshBaseData"
-                     :buttons="{
-        before: [
-            // {icon: 'fas fa-search', event: 'search'},
-          ],
-        after: [
-            {icon: 'fas fa-sync-alt', tooltip: 'Reload base and all items', event: 'reload-bases'},
-            {icon: 'fas fa-trash', tooltip: 'Delete this base and all items in it. To delete a single item, right click on the tab', event: 'delete-base'},
-          ],
-        }" :onBack="() => {$router.push('/workspace/' + $route.params.workspaceName)}"
-                     :title='$route.params.workspaceName
-                     + "&nbsp;&nbsp; › &nbsp;&nbsp;" + ($route.params.baseName)
-                     + ( $route.params.itemName ? "&nbsp;&nbsp; › &nbsp;&nbsp;" + ($route.params.itemName) : "" )  '
-    ></user-header-bar>
-
+    </q-drawer>
 
     <q-dialog v-model="confirmDeleteBaseMessage">
       <q-card style="background: white">
@@ -225,10 +247,10 @@
                     <q-checkbox label="Allow guests to see this item"
                                 v-model="itemConfiguration.allowGuests"></q-checkbox>
                   </div>
-<!--                  <div class="col-12">-->
-<!--                    <q-checkbox label="Show this on frontpage"-->
-<!--                                v-model="itemConfiguration.showOnFrontpage"></q-checkbox>-->
-<!--                  </div>-->
+                  <!--                  <div class="col-12">-->
+                  <!--                    <q-checkbox label="Show this on frontpage"-->
+                  <!--                                v-model="itemConfiguration.showOnFrontpage"></q-checkbox>-->
+                  <!--                  </div>-->
                 </div>
               </div>
             </div>
@@ -254,20 +276,15 @@
 </template>
 <style scoped>
 
-/*.q-tab {*/
-/*  border: 1px solid black;*/
-/*  border-radius: 4px;*/
-/*  height: 39px;*/
-/*  top: 4px;*/
-/*  margin-left: 2px;*/
-/*  margin-right: 2px;*/
+@media print {
+  .base-view-router {
+    padding-top: 0 !important;
+  }
+}
 
-/*}*/
-
-/*.q-tab .q-tab__content {*/
-/*  left: -20px;*/
-/*  margin-top: -4px;*/
-/*}*/
+.base-view-router {
+  padding-top: 50px;
+}
 
 .q-tab span i.q-icon {
   margin-top: -5px;
@@ -289,19 +306,11 @@
 
 <script>
 import {mapActions, mapGetters} from 'vuex';
+import Vue from 'vue'
 import BaseViewRouter from "pages/UserApps/BaseViewRouter";
 import {v4 as uuidv4} from 'uuid';
 
 
-function makeid(length) {
-  var result = '';
-  var characters = 'abcdefghijklmnopqrstuvwxyz';
-  var charactersLength = characters.length;
-  for (var i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
-  return result;
-}
 
 window.XLSX = XLSX;
 
@@ -332,6 +341,17 @@ export default {
   },
 
   methods: {
+    selectFirstFilteredDocument() {
+      const that = this;
+      if (that.documentFilterKeyword) {
+        var filteredDocs = that.filteredDocuments;
+        if (filteredDocs.length > 0) {
+          that.$router.push('/workspace/' + that.workspaceName + '/' + that.baseName + '/' + filteredDocs[0].document_name)
+        } else {
+          that.selectedBaseItem = null;
+        }
+      }
+    },
     showAddNewItemMenu() {
       document.getElementById("newTableButton").click()
     },
@@ -402,7 +422,7 @@ export default {
         that.$q.notify({
           message: "Item deleted"
         });
-        delete that.baseItemMap[that.itemBeingEdited.document_name];
+        delete that.baseDocumentsItemMap[that.itemBeingEdited.document_name];
         var indexToDelete = -1;
         for (var i = 0; i < that.baseConfig.items.length; i++) {
           if (that.baseConfig.items[i].document_name === that.itemBeingEdited.document_name) {
@@ -446,12 +466,20 @@ export default {
           document_name: that.newName,
         }).then(function (res) {
           console.log("Updated item name", res);
-          that.baseItemMap[that.newName] = that.baseItemMap[originalTitle];
+          that.baseDocumentsItemMap[that.newName] = that.baseDocumentsItemMap[originalTitle];
           // that.$refs.viewRouter.reloadBaseItem()
-          delete that.baseItemMap[originalTitle];
-          if (originalTitle === that.selectedItem) {
-            that.$router.push('/workspace/' + that.workspaceName + "/" + that.baseName + "/" + that.newName)
+          delete that.baseDocumentsItemMap[originalTitle];
+
+          for (var i = 0; i < that.baseConfig.items.length; i++) {
+            if (that.baseConfig.items[i].document_name === that.itemBeingEdited.document_name) {
+              Vue.set(that.baseConfig.items[i], "document_name", that.newName)
+            }
+
           }
+
+          // if (originalTitle === that.selectedItem) {
+          that.$router.push('/workspace/' + that.workspaceName + "/" + that.baseName + "/" + that.newName)
+          // }
           // that.refreshData()
         }).catch(function (err) {
           console.log("Failed to update item name", err)
@@ -463,6 +491,11 @@ export default {
       const that = this;
       console.log("Add new item to base", itemTemplate);
       let newItemLabel = "New " + itemTemplate.type + " - " + Math.floor(Math.random() * 90 + 10);
+
+      if (that.documentFilterKeyword && that.documentFilterKeyword.length > 0) {
+        newItemLabel = that.documentFilterKeyword;
+      }
+
       let newItem = {
         type: itemTemplate.type,
         label: newItemLabel
@@ -503,21 +536,20 @@ export default {
         var finalNewItem = {...newItem, ...res.data}
         console.log("New item created, ensure new tables", finalNewItem)
         that.baseConfig.items.push(finalNewItem);
-        that.baseItemMap[newItemLabel] = finalNewItem;
+        that.baseDocumentsItemMap[newItemLabel] = finalNewItem;
 
-        that.ensureBaseTables().then(function () {
-          that.selectedBaseItem = finalNewItem;
-          that.$nextTick().then(function () {
-            that.$refs.viewRouter.reloadBaseItem()
+        that.selectedBaseItem = finalNewItem;
+        that.$nextTick().then(function () {
+          that.$refs.viewRouter.reloadBaseItem();
+
+          if (that.documentFilterKeyword === newItemLabel) {
+            that.documentFilterKeyword = null;
+            that.$router.push('/workspace/' + that.workspaceName + "/" + that.baseName + "/" + newItemLabel)
+          } else {
             that.renameBaseItem(finalNewItem);
-          })
-        }).catch(function (err) {
-          console.log("Failed to ensure tables for new items", err);
-          that.$q.notify({
-            type: "negative",
-            message: "Something went wrong while creating new item: " + JSON.stringify(err)
-          })
-        });
+          }
+
+        })
 
 
       }).catch(function (err) {
@@ -550,6 +582,9 @@ export default {
         for (var i = 0; i < res.data.length; i++) {
           var item = res.data[i];
           console.log("Delete item", item);
+          if (item.document_extension === "table") {
+            console.log("need to delete associated table", item)
+          }
           promises.push(that.deleteRow({
             tableName: "document",
             reference_id: item.id
@@ -560,7 +595,7 @@ export default {
 
           for (var i = 0; i < that.baseConfig.items.length; i++) {
             var item = that.baseConfig.items[i];
-            if (item.document_extension === "table") {
+            if (item.document_extension === "table" && item.targetTable) {
               console.log("target table details,", item);
               that.deleteTableByName(item.targetTable.TableName)
             }
@@ -599,10 +634,13 @@ export default {
     showUploadData() {
 
     },
+    setCurrentDocument(doc) {
+      this.selectedItem = doc;
+    },
     ...mapActions(['loadData', 'getTableSchema', 'updateRow', 'createRow', 'deleteRow', 'executeAction', 'loadModel', 'deleteTableByName']),
     refreshBaseData() {
       const that = this;
-      that.baseItemMap = {};
+      that.baseDocumentsItemMap = {};
 
       return new Promise(function (resolve, reject) {
 
@@ -651,13 +689,14 @@ export default {
           var baseRow = res.data[0];
           that.baseRow = baseRow
           if (!baseRow.document_content) {
-            alert("Base configuration is empty - " + baseRow)
+            alert("Base configuration is empty - " + baseRow);
+
             return
           }
           var baseConfigString = baseRow.document_content[0].contents;
           that.baseConfig = JSON.parse(atob(baseConfigString));
           that.baseConfig.name = that.baseName;
-          console.log("selected base item 1", that.selectedItem, that.baseConfig, that.baseItemMap, that.selectedBaseItem)
+          console.log("selected base item 1", that.selectedItem, that.baseConfig, that.baseDocumentsItemMap, that.selectedBaseItem)
 
 
           queryPayload = {
@@ -675,7 +714,7 @@ export default {
               page: {
                 size: 100,
               },
-              included_relations: "document_content"
+              included_relations: ""
             }
           };
           that.baseConfig.items = [];
@@ -686,18 +725,17 @@ export default {
             for (var i = 0; i < res.data.length; i++) {
               try {
                 var item = res.data[i];
-                var itemConfig = JSON.parse(atob(item.document_content[0].contents))
-                item = {...item, ...itemConfig}
-                that.baseItemMap[item.document_name] = item;
+                that.baseDocumentsItemMap[item.document_name] = item;
                 that.baseConfig.items.push(item);
+                // var itemConfig = JSON.parse(atob(item.document_content[0].contents))
+                // item = {...item, ...itemConfig}
+                // that.baseDocumentsItemMap[item.document_name] = item;
               } catch (e) {
                 console.log("failed to parse item data", e)
               }
             }
-            that.selectedBaseItem = that.baseItemMap[that.selectedItem];
-            that.ensureBaseTables().then(function () {
-              resolve()
-            }).catch(reject)
+            that.setCurrentDocument(that.baseDocumentsItemMap[that.selectedItem])
+            resolve()
           });
         })
 
@@ -706,165 +744,22 @@ export default {
 
 
     },
-    ensureBaseTables() {
-      const that = this;
-      console.log("Ensure base tables", this.baseConfig)
-
-      var promises = [];
-      var updateSchema = {
-        Tables: [],
-      };
-
-
-      for (let i = 0; i < that.baseConfig.items.length; i++) {
-        const baseItem = that.baseConfig.items[i];
-        if (baseItem.document_extension === "table") {
-          console.log("Table item", baseItem, baseItem.targetTable);
-          var targetTable = baseItem.targetTable;
-          if (!targetTable) {
-            var targetTableConfig = baseItem.attributes;
-            if (!targetTableConfig) {
-              console.log("No columns defined for table: ", baseItem)
-              targetTableConfig = {
-                Columns: []
-              }
-            }
-            targetTableConfig.TableName = "tab_" + makeid(7)
-
-            for (let j = 0; j < targetTableConfig.Columns.length; j++) {
-              const column = targetTableConfig.Columns[j];
-              if (column.ColumnType.startsWith("file.")) {
-                column.DataType = "blob"
-                column.IsForeignKey = true
-                column.ForeignKeyData = {
-                  DataSource: "cloud_store",
-                  Namespace: "localstore",
-                  KeyName: column.ColumnName,
-                }
-              }
-            }
-
-            console.log("No target table exists for this item, creating one", baseItem.document_name, targetTableConfig.TableName);
-            updateSchema.Tables.push(targetTableConfig);
-            baseItem.targetTable = targetTableConfig;
-
-            that.baseItemMap[baseItem.document_name].document_content[0].contents = btoa(JSON.stringify(baseItem))
-            console.log("Update base request", that.baseItemMap[baseItem.document_name])
-            that.baseItemMap[baseItem.document_name].tableName = "document";
-            promises.push(that.updateRow(that.baseItemMap[baseItem.document_name]))
-          }
-        }
-      }
-
-      return new Promise(function (resolve, reject) {
-        Promise.all(promises).then(function () {
-          if (updateSchema.Tables.length > 0) {
-            that.$q.loadingBar.start();
-
-            that.$q.notify({
-              message: "Creating " + updateSchema.Tables.length + " tables"
-            });
-            that.executeAction({
-              tableName: "world",
-              actionName: "upload_system_schema",
-              params: {
-                schema_file: [{
-                  contents: "application/json," + btoa(JSON.stringify(updateSchema)),
-                  name: that.baseName + ".json"
-                }]
-              }
-            }).then(function (res) {
-              that.$q.loadingBar.stop();
-              console.log("Tables created", res);
-              that.$q.notify({
-                message: "Base tables created, please wait while we generate random data to begin"
-              });
-              // that.$nextTick().then(function () {
-              //   that.$q.loadingBar.start();
-              // })
-
-
-              console.log("Try to create random data for the new base");
-              that.$q.notify({
-                message: "Generating random data for " + updateSchema.Tables.length + " tables"
-              });
-              that.$q.loadingBar.start();
-              var randomDataPromises = []
-              randomDataPromises = updateSchema.Tables.map(function (table) {
-                console.log("Create random data for ", table.TableName);
-
-                return new Promise(function (resolve, reject) {
-                  var generateRandomDataAndLoad = function () {
-
-                    setTimeout(function () {
-                      that.executeAction({
-                        tableName: "world",
-                        actionName: "generate_random_data",
-                        params: {
-                          "table_name": table.TableName,
-                          "count": 10,
-                        }
-                      }).then(function (res) {
-                        console.log("Generate random data response", res)
-                        if (!res || res === "") {
-                          console.log("data generate failed, try again", res)
-                          that.$q.loadingBar.increment(5);
-                          generateRandomDataAndLoad()
-                          return
-                        }
-                        that.$q.loadingBar.increment(5);
-                        console.log("Random data generated for table", table.TableName)
-                        resolve();
-
-                      }).catch(function (err) {
-                        generateRandomDataAndLoad()
-                        console.log("Failed to generate random data for ", table.TableName, "Trying again in 5 seconds")
-                      })
-                    }, 5000)
-
-
-                  }
-                  generateRandomDataAndLoad()
-
-                })
-
-
-              })
-              Promise.all(randomDataPromises).then(function () {
-                that.$q.loadingBar.stop();
-                resolve()
-              }).catch(function (err) {
-                console.log("Failed to create random data", err)
-              })
-
-
-            }).catch(function (err) {
-              console.log("Failed to create table", err)
-              that.$q.notify({
-                message: "Failed to create tables for the base"
-              });
-              reject()
-            })
-
-
-          } else {
-            resolve();
-          }
-        })
-      })
-
-
-    },
     refreshData() {
       const that = this;
       that.newRowData = [];
       that.sourceMap = {};
-      console.log("Refresh data, update the selected item", that.selectedItem, that.baseItemMap);
       console.log("Updated base ", that.selectedItem, that.baseName, that.selectedBaseItem);
+      that.baseLoaded = false;
 
       that.selectedItem = that.$route.params.itemName;
       that.baseName = that.$route.params.baseName;
-      that.selectedBaseItem = that.baseItemMap[that.selectedItem]
+      console.log("Refresh data, update the selected item", that.selectedItem, that.baseDocumentsItemMap);
+      that.selectedBaseItem = that.baseDocumentsItemMap[that.selectedItem]
+
+      if (that.baseConfig.items.length === 0) {
+        that.documentTab = false;
+      }
+
       that.baseLoaded = true;
       return Promise.resolve();
     },
@@ -872,6 +767,9 @@ export default {
   props: ["baseConfiguration"],
   data() {
     return {
+      documentTab: false,
+      documentFilterKeyword: null,
+      documentTabminiState: true,
       showBaseConfigurationModel: false,
       baseItemMap: {},
       itemConfiguration: {},
@@ -916,7 +814,20 @@ export default {
     }
   },
   computed: {
-    ...mapGetters(['endpoint', 'authToken', 'tables', 'baseItemTypes'])
+    filteredDocuments() {
+      const that = this;
+      if (that.documentFilterKeyword === '' || that.documentFilterKeyword == null) {
+        return this.baseConfig.items;
+      }
+      var x = this.baseConfig.items.filter(function (item) {
+        console.log("Filter documents by keyword", item, that.documentFilterKeyword, item.document_name.indexOf(that.documentFilterKeyword),
+          item.document_name.indexOf(that.documentFilterKeyword) > -1)
+        return item.document_name.indexOf(that.documentFilterKeyword) > -1
+      });
+      console.log("filtered docs", x)
+      return x;
+    },
+    ...mapGetters(['endpoint', 'authToken', 'tables', 'baseItemTypes', 'decodedAuthToken'])
   },
   updated() {
   },

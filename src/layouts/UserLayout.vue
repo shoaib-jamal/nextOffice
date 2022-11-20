@@ -3,7 +3,7 @@
 
   <div>
     <router-view @logout="triggerLogout()" v-if="loaded"/>
-    <q-dialog persistent v-model="showOfflineDialog" position="bottom">
+    <q-dialog v-if="showOfflineDialog" persistent v-model="showOfflineDialog" position="bottom">
       <q-card style="width: 350px">
         <q-linear-progress :value="1" color="red"/>
 
@@ -15,7 +15,8 @@
 
           <q-space/>
 
-          <q-btn @click="$router.push('/backend')" color="primary" label="Go to server selector page" icon="fast_forward"/>
+          <q-btn @click="$router.push('/backend')" color="primary" label="Go to server selector page"
+                 icon="fast_forward"/>
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -77,7 +78,6 @@ export default {
       showOfflineDialog: false,
       showAdminDrawerMini: false,
       showAdminDrawerStick: false,
-      ...mapGetters(['loggedIn', 'drawerLeft', 'authToken', 'decodedAuthToken', 'userGroupTable']),
       essentialLinks: [],
       drawer: false,
       userDrawer: true,
@@ -85,6 +85,7 @@ export default {
       miniState: true,
       isAdmin: false,
       isUser: false,
+      ...mapGetters(['loggedIn', 'drawerLeft', 'authToken', 'decodedAuthToken', 'userGroupTable']),
     }
   },
   mounted() {
@@ -99,11 +100,11 @@ export default {
         });
         that.setDecodedAuthToken(null);
         that.logout();
-        this.$router.push("/login");
+        that.$router.push("/login");
         return
       }
     } else {
-      this.$router.push("/login");
+      that.$router.push("/login");
       return
     }
 
@@ -126,8 +127,39 @@ export default {
             });
             that.loadTable("world");
 
+            let defaultworkspacename = "my workspace";
+            var newRow = {
+              document_name: defaultworkspacename,
+              tableName: "document",
+              document_extension: "folder",
+              mime_type: 'workspace/root',
+              document_path: defaultworkspacename,
+              document_content: [],
+            }
+            console.log("Create folder request", newRow)
+
+            that.createRow(newRow).then(function (res) {
+              that.$emit("new-workspace-created")
+            }).catch(function (e) {
+              console.log("Failed to create folder", e)
+              that.$q.notify({
+                message: "Failed to create folder: " + JSON.stringify(e)
+              });
+            }).then(function (res) {
+              console.log("created new workspace: ", res.data)
+            }).catch(function (err) {
+              that.$q.notify({
+                type: "error",
+                message: "failed to create default workspace, please try creating one manually"
+              })
+            });
+
+
           }).catch(function (err) {
             console.log("Failed to become admin", err);
+            that.loaded = true;
+            // that.$router.push("/login");
+            // return
           })
         }
 
@@ -156,7 +188,9 @@ export default {
 
   },
   methods: {
-    ...mapActions(['getDefaultCloudStore', 'loadModel', 'executeAction', 'loadData', 'setDecodedAuthToken', 'loadTable', 'logout']),
+    ...mapActions(['getDefaultCloudStore', 'loadModel',
+      'executeAction', 'createRow',
+      'loadData', 'setDecodedAuthToken', 'loadTable', 'logout']),
     triggerLogout() {
 
       this.logout();

@@ -31,7 +31,12 @@ export function setSelectedActionForEditor(state, action) {
 export function setActions(state, actions) {
   state.actions = [];
   for (var i = 0; i < actions.length; i++) {
-    actions[i].ActionSchema = JSON.parse(actions[i].action_schema)
+    try {
+      actions[i].ActionSchema = JSON.parse(actions[i].action_schema)
+    } catch (e) {
+      console.log("Failed to parse json action schema", actions[i].ActionSchema)
+      actions[i].ActionSchema = {}
+    }
     state.actions.push(actions[i])
   }
 }
@@ -66,11 +71,14 @@ export function clearTablesCache(state) {
 
 export function setTables(state, tables) {
   // var newTableMap = {}
-  // console.log("set tables", tables)
+  console.log("set tables", tables)
   //
+  if (tables instanceof Object) {
+    tables = Object.values(tables)
+  }
   state.tables = [];
   for (var i = 0; i < tables.length; i++) {
-    state.tables[i] = tables[i];
+    state.tables[tables[i].table_name] = tables[i];
   }
   console.log("Tables set to ", state.tables)
 }
